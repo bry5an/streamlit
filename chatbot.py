@@ -2,43 +2,39 @@ import streamlit as st
 import boto3
 import json
 
-# --- Configuration ---
-REGION_NAME = "us-east-1"
-MODEL_ID = "anthropic.claude-v2"  # or other supported model IDs
+# Configuration
+REGION = "us-east-1"
+MODEL_ARN = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229"
+KNOWLEDGE_BASE_ID = ""  # replace with your actual ID
 
-# --- AWS Bedrock client ---
-def get_bedrock_client():
-    return boto3.client("bedrock-runtime", region_name=REGION_NAME)
+# AWS Bedrock Agent runtime client
+client = boto3.client("bedrock-agent-runtime", region_name=REGION)
 
-# --- Call Bedrock model ---
-def query_bedrock(prompt, model_id=MODEL_ID):
-    client = get_bedrock_client()
-    body = {
-        "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-        "max_tokens_to_sample": 300,
-        "temperature": 0.7,
-        "stop_sequences": ["\n\nHuman:"]
-    }
-    response = client.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps(body),
+def query_with_knowledge_base(prompt):
+    response = client.retrieve_and_generate(
+        input={
+            "text": prompt
+        },
+        retrieveAndGenerateConfiguration={
+            "type": "KNOWLEDGE_BASE",
+            "knowledgeBaseConfiguration": {
+                "knowledgeBaseId": KNOWLEDGE_BASE_ID,
+                "modelArn": MODEL_ARN
+            }
+        }
     )
-    response_body = json.loads(response["body"].read())
-    return response_body.get("completion", "No response.")
+    return response["output"]["text"]
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="AWS Bedrock Chatbot", layout="centered")
-st.title("🤖 AWS Bedrock Chatbot")
-st.markdown("Chat with an Anthropic Claude model using AWS Bedrock.")
+# Streamlit UI
+st.title("📚 Bedrock RAG Chatbot")
+st.markdown("Powered by a Bedrock Knowledge Base")
 
-user_input = st.text_input("You:", "")
+user_input = st.text_input("Ask a question:")
 
-if st.button("Send") and user_input:
-    with st.spinner("Thinking..."):
+if st.button("Submit") and user_input:
+    with st.spinner("Querying knowledge base..."):
         try:
-            result = query_bedrock(user_input)
-            st.markdown(f"**Assistant:** {result}")
+            answer = query_with_knowledge_base(user_input)
+            st.markdown(f"**Answer:** {answer}")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Failed to query Bedrock: {e}")
